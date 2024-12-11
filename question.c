@@ -3,7 +3,7 @@
 #include <SDL2/SDL_mixer.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h> // For getcwd
+#include <unistd.h> // Pour getcwd()
 #include "text_field.h"
 #include "graphics.h"
 #include "audio.h"
@@ -27,9 +27,14 @@ void displayQuestion(SDL_Renderer *renderer, TTF_Font *font, char *filename, cha
     TextField responseField = {"", {200, 300, 240, 40}, 1}; // Champ de réponse actif
     int running = 1;
     int isCorrect = 0; // Flag pour vérifier si la réponse est correcte
+    int hasAttempted = 0; // Flag pour vérifier si une tentative a été faite
     SDL_Event event;
     Uint32 cursorStartTime = SDL_GetTicks(); // Timer pour le curseur
     int cursorVisible = 1; // État du curseur (visible ou invisible)
+
+    // Bouton "Suivant"
+    SDL_Rect nextButtonRect = {270, 400, 100, 50};
+    int nextButtonClicked = 0;
 
     // Afficher le répertoire de travail actuel
     char cwd[1024];
@@ -66,17 +71,22 @@ void displayQuestion(SDL_Renderer *renderer, TTF_Font *font, char *filename, cha
             } else if (event.type == SDL_MOUSEBUTTONDOWN) {
                 int x = event.button.x;
                 int y = event.button.y;
-                if (x >= responseField.rect.x && x <= responseField.rect.x + responseField.rect.w &&
+                if (!hasAttempted && x >= responseField.rect.x && x <= responseField.rect.x + responseField.rect.w &&
                     y >= responseField.rect.y && y <= responseField.rect.y + responseField.rect.h) {
                     responseField.is_active = 1;
                 } else {
                     responseField.is_active = 0;
                 }
-            } else if (event.type == SDL_TEXTINPUT) {
+
+                if ((isCorrect == 1 || isCorrect == -1) && x >= nextButtonRect.x && x <= nextButtonRect.x + nextButtonRect.w &&
+                    y >= nextButtonRect.y && y <= nextButtonRect.y + nextButtonRect.h) {
+                    nextButtonClicked = 1;
+                }
+            } else if (!hasAttempted && event.type == SDL_TEXTINPUT) {
                 if (responseField.is_active && strlen(responseField.text) < MAX_TEXT_LENGTH - 1) {
                     strcat(responseField.text, event.text.text);
                 }
-            } else if (event.type == SDL_KEYDOWN) {
+            } else if (!hasAttempted && event.type == SDL_KEYDOWN) {
                 if (responseField.is_active && event.key.keysym.sym == SDLK_BACKSPACE) {
                     size_t len = strlen(responseField.text);
                     if (len > 0) {
@@ -98,6 +108,7 @@ void displayQuestion(SDL_Renderer *renderer, TTF_Font *font, char *filename, cha
                     } else {
                         isCorrect = -1; // Réponse incorrecte
                     }
+                    hasAttempted = 1; // Marquer qu'une tentative a été faite
                 }
             }
         }
@@ -140,17 +151,54 @@ void displayQuestion(SDL_Renderer *renderer, TTF_Font *font, char *filename, cha
             SDL_Rect correctRect;
             TTF_SizeText(font, "Correct !", &correctRect.w, &correctRect.h);
             correctRect.x = (640 - correctRect.w) / 2;
-            correctRect.y = 400;
+            correctRect.y = 350;
             renderText(renderer, font, "Correct !", &correctRect, textColor);
         } else if (isCorrect == -1) {
             SDL_Rect incorrectRect;
             TTF_SizeText(font, "Incorrect...", &incorrectRect.w, &incorrectRect.h);
             incorrectRect.x = (640 - incorrectRect.w) / 2;
-            incorrectRect.y = 400;
+            incorrectRect.y = 350;
             renderText(renderer, font, "Incorrect...", &incorrectRect, textColor);
         }
 
+        // Afficher le bouton "Suivant" si la réponse est correcte ou incorrecte
+        if (isCorrect == 1 || isCorrect == -1) {
+            SDL_SetRenderDrawColor(renderer, fieldColor.r, fieldColor.g, fieldColor.b, fieldColor.a);
+            SDL_RenderFillRect(renderer, &nextButtonRect);
+            SDL_SetRenderDrawColor(renderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
+            SDL_RenderDrawRect(renderer, &nextButtonRect);
+            SDL_Rect nextTextRect = {nextButtonRect.x + 10, nextButtonRect.y + 10, 0, 0};
+            renderText(renderer, font, "Suivant", &nextTextRect, textColor);
+        }
+
         SDL_RenderPresent(renderer);
+
+        // Si le bouton "Suivant" est cliqué, passer à la question suivante
+        if (nextButtonClicked) {
+            nextButtonClicked = 0;
+            isCorrect = 0;
+            hasAttempted = 0;
+            responseField.text[0] = '\0'; // Réinitialiser le champ de réponse
+
+            // Arrêter la musique de la question précédente
+            cleanAudio();
+
+            // Lire la prochaine question depuis le fichier
+            file = fopen("questions.txt", "r");
+            if (!file) {
+                printf("Erreur d'ouverture du fichier questions.txt\n");
+                return;
+            }
+            if (fgets(question, sizeof(question), file) == NULL) {
+                printf("Erreur de lecture de la question\n");
+                fclose(file);
+                return;
+            }
+            fclose(file);
+
+            // Jouer la musique pour la nouvelle question
+            playAudio(filename);
+        }
     }
 
     SDL_StopTextInput();
