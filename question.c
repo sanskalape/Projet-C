@@ -63,6 +63,8 @@ void displayQuestion(SDL_Renderer *renderer, TTF_Font *font, char *filename, cha
     SDL_StartTextInput();
     playAudio(filename); // Jouer la musique au lancement
 
+    int questionCount = 1; // Compteur de questions
+
     while (running) {
         // Gestion des événements
         while (SDL_PollEvent(&event)) {
@@ -183,21 +185,36 @@ void displayQuestion(SDL_Renderer *renderer, TTF_Font *font, char *filename, cha
             // Arrêter la musique de la question précédente
             cleanAudio();
 
-            // Lire la prochaine question depuis le fichier
-            file = fopen("questions.txt", "r");
-            if (!file) {
-                printf("Erreur d'ouverture du fichier questions.txt\n");
-                return;
-            }
-            if (fgets(question, sizeof(question), file) == NULL) {
-                printf("Erreur de lecture de la question\n");
-                fclose(file);
-                return;
-            }
-            fclose(file);
+            // Incrémenter le compteur de questions
+            questionCount++;
 
-            // Jouer la musique pour la nouvelle question
-            playAudio(filename);
+            if (questionCount > 5) {
+                // Afficher "Fin du jeu" et arrêter la boucle
+                SDL_Rect endRect;
+                TTF_SizeText(font, "Fin du jeu", &endRect.w, &endRect.h);
+                endRect.x = (640 - endRect.w) / 2;
+                endRect.y = 240;
+                renderText(renderer, font, "Fin du jeu", &endRect, textColor);
+                SDL_RenderPresent(renderer);
+                SDL_Delay(3000); // Attendre 3 secondes avant de quitter
+                running = 0;
+            } else {
+                // Lire la prochaine question depuis le fichier
+                file = fopen("questions.txt", "r");
+                if (!file) {
+                    printf("Erreur d'ouverture du fichier questions.txt\n");
+                    return;
+                }
+                if (fgets(question, sizeof(question), file) == NULL) {
+                    printf("Erreur de lecture de la question\n");
+                    fclose(file);
+                    return;
+                }
+                fclose(file);
+
+                // Jouer la musique pour la nouvelle question
+                playAudio(filename);
+            }
         }
     }
 
